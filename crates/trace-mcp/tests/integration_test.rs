@@ -683,6 +683,65 @@ fn test_empty_seqs() {
 }
 
 #[test]
+fn test_compact_vs_full_output() {
+    let (engine, sid) = setup_session(&get_trace_path());
+    let lines = engine.get_lines(&sid, &[0, 1, 2]).expect("get_lines");
+    assert!(!lines.is_empty());
+
+    let line = &lines[0];
+
+    // Full mode: serde serialization includes all fields
+    let full = serde_json::to_value(line).unwrap();
+    assert!(full.get("raw").is_some(), "full should have 'raw'");
+    assert!(full.get("reg_before").is_some(), "full should have 'reg_before'");
+    assert!(full.get("so_offset").is_some(), "full should have 'so_offset'");
+
+    // Compact mode: simulate compact_line trimming
+    let mut compact = serde_json::json!({
+        "seq": line.seq,
+        "address": line.address,
+        "disasm": line.disasm,
+    });
+    if !line.changes.is_empty() {
+        compact["changes"] = serde_json::json!(line.changes);
+    }
+    if let Some(ref rw) = line.mem_rw {
+        compact["mem_rw"] = serde_json::json!(rw);
+    }
+    if let Some(ref addr) = line.mem_addr {
+        compact["mem_addr"] = serde_json::json!(addr);
+    }
+    if let Some(ref name) = line.so_name {
+        compact["so_name"] = serde_json::json!(name);
+    }
+    if let Some(ref info) = line.call_info {
+        if !info.func_name.is_empty() {
+            compact["func_name"] = serde_json::json!(info.func_name);
+        }
+    }
+
+    // Compact should NOT have trimmed fields
+    assert!(compact.get("raw").is_none(), "compact should NOT have 'raw'");
+    assert!(compact.get("reg_before").is_none(), "compact should NOT have 'reg_before'");
+    assert!(compact.get("so_offset").is_none(), "compact should NOT have 'so_offset'");
+    assert!(compact.get("mem_size").is_none(), "compact should NOT have 'mem_size'");
+
+    // Compact should have core fields
+    assert!(compact.get("seq").is_some(), "compact should have 'seq'");
+    assert!(compact.get("address").is_some(), "compact should have 'address'");
+    assert!(compact.get("disasm").is_some(), "compact should have 'disasm'");
+
+    // Compact should have fewer fields than full
+    let compact_keys = compact.as_object().unwrap().len();
+    let full_keys = full.as_object().unwrap().len();
+    assert!(compact_keys < full_keys,
+        "compact ({} keys) should have fewer fields than full ({} keys)",
+        compact_keys, full_keys);
+
+    engine.close_session(&sid).unwrap();
+}
+
+#[test]
 fn test_hex_addr_parsing() {
     // Test the parse_hex_addr logic used in MCP tools
     fn parse_hex_addr(s: &str) -> Result<u64, String> {

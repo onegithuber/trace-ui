@@ -7,7 +7,7 @@ use rmcp::{
     tool, tool_handler, tool_router,
 };
 
-use trace_core::{TraceEngine, BuildOptions, SearchOptions, SliceOptions, StringQueryOptions, DepTreeOptions, ExportConfig, parse_hex_addr};
+use trace_core::{TraceEngine, BuildOptions, SearchOptions, SliceOptions, StringQueryOptions, DepTreeOptions, ExportConfig, parse_hex_addr, api_types::TraceLine};
 use crate::types::*;
 
 // ── 截断常量 ──
@@ -37,6 +37,43 @@ where
     tokio::task::spawn_blocking(f)
         .await
         .map_err(|e| format!("Task panicked: {}", e))?
+}
+
+/// Compact 模式下裁剪 TraceLine 为精简 JSON
+fn compact_line(line: &TraceLine) -> serde_json::Value {
+    let mut obj = serde_json::json!({
+        "seq": line.seq,
+        "address": line.address,
+        "disasm": line.disasm,
+    });
+    if !line.changes.is_empty() {
+        obj["changes"] = serde_json::json!(line.changes);
+    }
+    if let Some(ref rw) = line.mem_rw {
+        obj["mem_rw"] = serde_json::json!(rw);
+    }
+    if let Some(ref addr) = line.mem_addr {
+        obj["mem_addr"] = serde_json::json!(addr);
+    }
+    if let Some(ref name) = line.so_name {
+        obj["so_name"] = serde_json::json!(name);
+    }
+    if let Some(ref info) = line.call_info {
+        if !info.func_name.is_empty() {
+            obj["func_name"] = serde_json::json!(info.func_name);
+        }
+    }
+    obj
+}
+
+fn format_lines(lines: &[TraceLine], full: bool) -> Vec<serde_json::Value> {
+    if full {
+        lines.iter().map(|l| serde_json::to_value(l)
+            .unwrap_or_else(|e| serde_json::json!({"error": e.to_string()}))
+        ).collect()
+    } else {
+        lines.iter().map(|l| compact_line(l)).collect()
+    }
 }
 
 #[derive(Clone)]
@@ -143,7 +180,7 @@ impl TraceToolHandler {
         let lines = self.engine.get_lines(&req.session_id, &seqs)
             .map_err(|e| e.to_string())?;
         Ok(json(&serde_json::json!({
-            "lines": lines,
+            "lines": format_lines(&lines, req.full),
             "count": lines.len(),
             "start_seq": req.start_seq,
             "requested": count,
@@ -228,14 +265,7 @@ impl TraceToolHandler {
             let lines = engine.get_lines(&req.session_id, &preview_seqs)
                 .map_err(|e| e.to_string())?;
 
-            let matches: Vec<serde_json::Value> = lines.iter().map(|l| {
-                serde_json::json!({
-                    "seq": l.seq,
-                    "address": l.address,
-                    "disasm": l.disasm,
-                    "changes": l.changes,
-                })
-            }).collect();
+            let matches = format_lines(&lines, req.full);
 
             Ok(json(&serde_json::json!({
                 "matches": matches,
@@ -297,7 +327,7 @@ impl TraceToolHandler {
             .map_err(|e| e.to_string())?;
 
         Ok(json(&serde_json::json!({
-            "lines": lines,
+            "lines": format_lines(&lines, req.full),
             "total_tainted": total,
             "offset": req.offset,
             "count": lines.len(),

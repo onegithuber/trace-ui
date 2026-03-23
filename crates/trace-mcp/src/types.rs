@@ -38,6 +38,9 @@ pub struct GetTraceLinesRequest {
     #[schemars(description = "Number of lines to retrieve (default: 20, max: 100)")]
     #[serde(default = "default_line_count")]
     pub count: u32,
+    #[schemars(description = "Return full TraceLine fields including raw, reg_before, so_offset, mem_size (default: false)")]
+    #[serde(default)]
+    pub full: bool,
 }
 
 fn default_line_count() -> u32 { 20 }
@@ -99,6 +102,9 @@ pub struct SearchInstructionsRequest {
     pub case_sensitive: bool,
     #[schemars(description = "Max results to return (default: 30, max: 200)")]
     pub max_results: Option<u32>,
+    #[schemars(description = "Return full TraceLine fields including raw, reg_before, so_offset, mem_size (default: false)")]
+    #[serde(default)]
+    pub full: bool,
 }
 
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -129,6 +135,9 @@ pub struct GetTaintedLinesRequest {
     #[schemars(description = "Max lines to return (default: 50, max: 200)")]
     #[serde(default = "default_taint_limit")]
     pub limit: u32,
+    #[schemars(description = "Return full TraceLine fields including raw, reg_before, so_offset, mem_size (default: false)")]
+    #[serde(default)]
+    pub full: bool,
 }
 
 fn default_taint_limit() -> u32 { 50 }
