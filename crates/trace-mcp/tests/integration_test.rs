@@ -755,3 +755,42 @@ fn test_hex_addr_parsing() {
     assert!(parse_hex_addr("not_hex").is_err());
     assert!(parse_hex_addr("").is_err());
 }
+
+// ━━━━━━━━━━━━━━━━━━━━━━ SliceOrigin ━━━━━━━━━━━━━━━━━━━━━━
+
+#[test]
+fn test_get_slice_origin() {
+    let (engine, sid) = setup_session(&get_trace_path());
+    let info = engine.get_session_info(&sid).unwrap();
+    let mid = info.total_lines / 2;
+
+    // Before taint: should be None
+    let origin = engine.get_slice_origin(&sid).expect("get_slice_origin");
+    assert!(origin.is_none());
+
+    // Run taint with range
+    engine.run_slice(
+        &sid,
+        &["reg:X0@last".to_string()],
+        trace_core::SliceOptions {
+            start_seq: Some(0),
+            end_seq: Some(mid),
+            data_only: true,
+        },
+    ).expect("run_slice");
+
+    // After taint: should have origin with all fields
+    let origin = engine.get_slice_origin(&sid).expect("get_slice_origin");
+    let origin = origin.expect("should have slice_origin after taint");
+    assert_eq!(origin.from_specs, vec!["reg:X0@last"]);
+    assert!(origin.data_only);
+    assert_eq!(origin.start_seq, Some(0));
+    assert_eq!(origin.end_seq, Some(mid));
+
+    // After clear: should be None again
+    engine.clear_slice(&sid).expect("clear_slice");
+    let origin = engine.get_slice_origin(&sid).expect("get_slice_origin");
+    assert!(origin.is_none());
+
+    engine.close_session(&sid).unwrap();
+}

@@ -196,6 +196,8 @@ impl TraceEngine {
             state.slice_origin = Some(SliceOrigin {
                 from_specs: from_specs.to_vec(),
                 data_only: options.data_only,
+                start_seq: options.start_seq,
+                end_seq: options.end_seq,
             });
         }
 
@@ -209,6 +211,13 @@ impl TraceEngine {
         state.slice_result = None;
         state.slice_origin = None;
         Ok(())
+    }
+
+    pub fn get_slice_origin(&self, session_id: &str) -> Result<Option<SliceOrigin>> {
+        let handle = self.get_handle(session_id)?;
+        let state = handle.state.read()
+            .map_err(|e| TraceError::Internal(e.to_string()))?;
+        Ok(state.slice_origin.clone())
     }
 
     pub fn get_tainted_seqs(&self, session_id: &str) -> Result<Vec<u32>> {

@@ -20,3 +20,4 @@ pub use engine::TraceEngine;
 pub use error::{TraceError, Result};
 pub use api_types::*;
 pub use utils::parse_hex_addr;
+pub use session::SliceOrigin;

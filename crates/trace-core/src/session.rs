@@ -18,9 +18,12 @@ use trace_parser::types::TraceFormat;
 use trace_parser::gumtrace::CallAnnotation;
 use crate::query::crypto::CryptoScanResult;
 
+#[derive(Clone)]
 pub struct SliceOrigin {
     pub from_specs: Vec<String>,
     pub data_only: bool,
+    pub start_seq: Option<u32>,
+    pub end_seq: Option<u32>,
 }
 
 /// 单个 trace 文件的会话状态
